@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>運送作業報告</title>
+    <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <style>
+        :root { --main-color: #2c3e50; --accent-color: #3498db; }
+        body { font-family: 'Noto Sans JP', sans-serif; padding: 20px; background: #f4f7f6; color: #333; }
+        .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .form-group { margin-bottom: 18px; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; font-size: 14px; }
+        input, select, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
+        .via-point-item { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+        .btn-remove { background: #e74c3c; color: white; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; flex-shrink: 0; }
+        .btn-add-via { background: white; color: var(--accent-color); border: 2px dashed var(--accent-color); padding: 8px; border-radius: 8px; width: 100%; margin-bottom: 20px; cursor: pointer; font-weight: bold; }
+        button.btn-submit { width: 100%; padding: 16px; background: var(--main-color); color: white; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h2>🚛 作業報告入力</h2>
+    <div class="card">
+        <form id="reportForm">
+            <div class="form-group">
+                <label>積日</label>
+                <input type="date" id="date" required>
+            </div>
+            <div class="form-group">
+                <label>得意先名</label>
+                <select id="store_id" required>
+                    <option value="">リスト取得中...</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>積込先</label>
+                <input type="text" id="loading_point" placeholder="例：芝浦倉庫" required>
+            </div>
+
+            <label>経由地 (任意)</label>
+            <div id="viaPointsContainer"></div>
+            <button type="button" class="btn-add-via" onclick="addViaPoint()">＋ 経由地を追加する</button>
+
+            <div class="form-group">
+                <label>納品先 (最終地点)</label>
+                <input type="text" id="delivery_point" placeholder="例：横浜営業所" required>
+            </div>
+
+            <div class="form-group">
+                <label>備考</label>
+                <textarea id="remarks" rows="2" placeholder="特記事項があれば入力"></textarea>
+            </div>
+            <button type="submit" class="btn-submit">報告を送信する</button>
+        </form>
+    </div>
+
+    <script>
+        const STORE_LIST_API = "https://script.google.com/macros/s/AKfycbz8u1ZeQDhog0yTS2dXXlC9KqM41Z967Vp-mXLvjjkmgbs_3p_qQMzSKuSt26Y-IHbf/exec";
+        const WEBHOOK_URL = "https://hook.eu1.make.com/7wchwrambaxlegy4h1hy8mxbpqh6orxv";
+        const LIFF_ID = "2009014587-Ej7Q1Xaq";
+
+        // 経由地追加
+        function addViaPoint() {
+            const container = document.getElementById('viaPointsContainer');
+            const div = document.createElement('div');
+            div.className = 'via-point-item';
+            div.innerHTML = `<input type="text" class="via-input" placeholder="経由地を入力">
+                             <button type="button" class="btn-remove" onclick="this.parentElement.remove()">×</button>`;
+            container.appendChild(div);
+        }
+
+        // 客先リスト取得
+        async function fetchStoreList() {
+            try {
+                const response = await fetch(STORE_LIST_API);
+                const stores = await response.json();
+                const select = document.getElementById('store_id');
+                select.innerHTML = '<option value="">選択してください</option>';
+                stores.forEach(store => {
+                    const opt = document.createElement('option');
+                    opt.value = store.id;
+                    opt.textContent = `${store.name} (${store.id})`;
+                    select.appendChild(opt);
+                });
+            } catch (e) {
+                document.getElementById('store_id').innerHTML = '<option value="">エラー: 取得失敗</option>';
+            }
+        }
+
+        async function main() {
+            await liff.init({ liffId: LIFF_ID });
+            if (!liff.isLoggedIn()) { liff.login(); }
+            document.getElementById('date').valueAsDate = new Date();
+            await fetchStoreList();
+        }
+
+        document.getElementById('reportForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const profile = await liff.getProfile();
+            const viaPoints = Array.from(document.querySelectorAll('.via-input')).map(i => i.value.trim()).filter(v => v).join('、');
+
+            const data = {
+                userId: profile.userId,
+                date: document.getElementById('date').value,
+                storeId: document.getElementById('store_id').value,
+                loadingPoint: document.getElementById('loading_point').value,
+                viaPoints: viaPoints,
+                deliveryPoint: document.getElementById('delivery_point').value,
+                remarks: document.getElementById('remarks').value
+            };
+
+            const response = await fetch(WEBHOOK_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) { alert('報告が完了しました。'); liff.closeWindow(); }
+            else { alert('送信に失敗しました。'); }
+        });
+
+        main();
+    </script>
+</body>
+</html>
