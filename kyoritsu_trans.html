@@ -7,71 +7,136 @@
     <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
     <style>
         :root { --main-color: #2c3e50; --accent-color: #3498db; }
-        body { font-family: sans-serif; padding: 20px; background: #f4f7f6; }
+        body { font-family: 'Noto Sans JP', sans-serif; padding: 20px; background: #f4f7f6; color: #333; }
         .card { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
         .form-group { margin-bottom: 18px; }
-        label { display: block; margin-bottom: 8px; font-weight: bold; }
-        input, select, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
-        button.btn-submit { width: 100%; padding: 16px; background: var(--main-color); color: white; border: none; border-radius: 8px; font-weight: bold; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; font-size: 14px; }
+        input, select, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
+        .via-point-item { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+        .btn-remove { background: #e74c3c; color: white; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; flex-shrink: 0; }
+        .btn-add-via { background: white; color: var(--accent-color); border: 2px dashed var(--accent-color); padding: 8px; border-radius: 8px; width: 100%; margin-bottom: 20px; cursor: pointer; font-weight: bold; }
+        button.btn-submit { width: 100%; padding: 16px; background: var(--main-color); color: white; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; }
+        
+        /* 件数入力欄の非表示スタイル */
+        #quantity_group { display: none; background: #eef2f7; padding: 10px; border-radius: 8px; border-left: 5px solid var(--accent-color); }
     </style>
 </head>
 <body>
+    <h2>🚛 作業報告入力</h2>
     <div class="card">
         <form id="reportForm">
             <div class="form-group"><label>積日</label><input type="date" id="date" required></div>
-            <div class="form-group"><label>客先</label><select id="store_id" required><option>読み込み中...</option></select></div>
-            <div class="form-group"><label>積込先</label><input type="text" id="loading_point" required></div>
-            <div class="form-group"><label>納品先</label><input type="text" id="delivery_point" required></div>
-            <div class="form-group"><label>備考</label><textarea id="remarks" rows="2"></textarea></div>
+            
+            <div class="form-group">
+                <label>客先</label>
+                <select id="store_id" onchange="toggleQuantityField()" required>
+                    <option value="">リスト取得中...</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="quantity_group">
+                <label>件数 (S002専用項目)</label>
+                <input type="number" id="quantity" placeholder="例：1" min="1">
+            </div>
+
+            <div class="form-group"><label>積込先</label><input type="text" id="loading_point" placeholder="例：芝浦倉庫" required></div>
+
+            <label>経由地 (任意)</label>
+            <div id="viaPointsContainer"></div>
+            <button type="button" class="btn-add-via" onclick="addViaPoint()">＋ 経由地を追加する</button>
+
+            <div class="form-group"><label>納品先 (最終地点)</label><input type="text" id="delivery_point" placeholder="例：横浜営業所" required></div>
+            <div class="form-group"><label>備考</label><textarea id="remarks" rows="2" placeholder="特記事項があれば入力"></textarea></div>
             <button type="submit" class="btn-submit">報告を送信する</button>
         </form>
     </div>
 
     <script>
-        const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxi2V8irtsST4AYwS_3udOJLJzMrgt2Y2ibJoOKXdKGDDCj77BCoY9uueyhrxPnt-oH/exec";
-        const WEBHOOK_URL = "https://hook.eu1.make.com/7wchwrambaxlegy4h1hy8mxbpqh6orxv";
-        const LIFF_ID = "2009014587-Ej7Q1Xaq";
+        const GAS_API_URL = "あなたのGASのURL";
+        const WEBHOOK_URL = "https://hook.eu1.make.com/qntixuyelp8dlp8lq9i41he4hyfcqf3p";
+        const LIFF_ID = "2008915952-kKiQGVoq";
+
+        // 客先の選択状態によって件数欄を出し入れする
+        function toggleQuantityField() {
+            const storeId = document.getElementById('store_id').value;
+            const quantityGroup = document.getElementById('quantity_group');
+            const quantityInput = document.getElementById('quantity');
+            
+            if (storeId === 'S002') {
+                quantityGroup.style.display = 'block';
+                quantityInput.required = true; // S002なら必須にする
+            } else {
+                quantityGroup.style.display = 'none';
+                quantityInput.required = false;
+                quantityInput.value = ""; // 非表示時は中身を消す
+            }
+        }
+
+        function addViaPoint() {
+            const container = document.getElementById('viaPointsContainer');
+            const div = document.createElement('div');
+            div.className = 'via-point-item';
+            div.innerHTML = `<input type="text" class="via-input" style="flex:1" placeholder="経由地を入力">
+                             <button type="button" class="btn-remove" onclick="this.parentElement.remove()">×</button>`;
+            container.appendChild(div);
+        }
 
         async function fetchStores() {
-            const response = await fetch(GAS_API_URL);
-            const stores = await response.json();
-            const select = document.getElementById('store_id');
-            select.innerHTML = '<option value="">選択してください</option>';
-            stores.forEach(s => {
-                const opt = document.createElement('option');
-                opt.value = s.id;
-                opt.textContent = `${s.name} (${s.id})`;
-                select.appendChild(opt);
-            });
+            try {
+                const response = await fetch(GAS_API_URL);
+                const stores = await response.json();
+                const select = document.getElementById('store_id');
+                select.innerHTML = '<option value="">選択してください</option>';
+                stores.forEach(s => {
+                    const opt = document.createElement('option');
+                    opt.value = s.id;
+                    opt.textContent = `${s.name} (${s.id})`;
+                    select.appendChild(opt);
+                });
+            } catch (err) { console.error(err); }
         }
 
         async function main() {
             try {
                 await liff.init({ liffId: LIFF_ID });
                 if (!liff.isLoggedIn()) { liff.login(); return; }
-                
                 document.getElementById('date').valueAsDate = new Date();
-                await fetchStores(); // GASからデータを取得
-                
-            } catch (err) {
-                alert("起動エラー: " + err.message);
-            }
+                await fetchStores();
+            } catch (err) { alert(err.message); }
         }
 
         document.getElementById('reportForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const profile = await liff.getProfile();
-            const data = {
-                userId: profile.userId,
-                date: document.getElementById('date').value,
-                storeId: document.getElementById('store_id').value,
-                loadingPoint: document.getElementById('loading_point').value,
-                deliveryPoint: document.getElementById('delivery_point').value,
-                remarks: document.getElementById('remarks').value
-            };
-            await fetch(WEBHOOK_URL, { method: 'POST', body: JSON.stringify(data) });
-            alert("報告完了");
-            liff.closeWindow();
+            const submitBtn = document.querySelector('.btn-submit');
+            submitBtn.disabled = true;
+            submitBtn.innerText = "送信中...";
+
+            try {
+                const profile = await liff.getProfile();
+                const viaInputs = document.querySelectorAll('.via-input');
+                const viaPointsString = Array.from(viaInputs).map(i => i.value.trim()).filter(v => v).join('、');
+
+                const data = {
+                    userId: profile.userId,
+                    userName: profile.displayName,
+                    date: document.getElementById('date').value,
+                    storeId: document.getElementById('store_id').value,
+                    quantity: document.getElementById('quantity').value || 1, // 件数を追加（空なら1）
+                    loadingPoint: document.getElementById('loading_point').value,
+                    viaPoints: viaPointsString,
+                    deliveryPoint: document.getElementById('delivery_point').value,
+                    remarks: document.getElementById('remarks').value
+                };
+
+                const response = await fetch(WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                if (response.ok) { alert("報告完了"); liff.closeWindow(); }
+                else { alert("送信失敗"); submitBtn.disabled = false; submitBtn.innerText = "報告を送信する"; }
+            } catch (err) { alert(err.message); submitBtn.disabled = false; }
         });
 
         main();
