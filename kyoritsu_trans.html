@@ -41,9 +41,9 @@
 
             <div class="form-group"><label>積込先</label><input type="text" id="loading_point" placeholder="例：芝浦倉庫" required></div>
 
-            <label>経由地 (任意)</label>
-            <div id="viaPointsContainer"></div>
-            <button type="button" class="btn-add-via" onclick="addViaPoint()">＋ 経由地を追加する</button>
+            <label id="via_label">経由地 (任意)</label>
+		<div id="viaPointsContainer"></div>
+		<button type="button" class="btn-add-via" id="add_via_btn" onclick="addViaPoint()">＋ 経由地を追加する</button>
 
             <div class="form-group"><label>納品先 (最終地点)</label><input type="text" id="delivery_point" placeholder="例：横浜営業所" required></div>
             <div class="form-group"><label>備考</label><textarea id="remarks" rows="2" placeholder="特記事項があれば入力"></textarea></div>
@@ -57,20 +57,33 @@
         const LIFF_ID = "2009014587-Ej7Q1Xaq";
 
         // 客先の選択状態によって件数欄を出し入れする
-        function toggleQuantityField() {
-            const storeId = document.getElementById('store_id').value;
-            const quantityGroup = document.getElementById('quantity_group');
-            const quantityInput = document.getElementById('quantity');
-            
-            if (storeId === 'S002') {
-                quantityGroup.style.display = 'block';
-                quantityInput.required = true; // S002なら必須にする
-            } else {
-                quantityGroup.style.display = 'none';
-                quantityInput.required = false;
-                quantityInput.value = ""; // 非表示時は中身を消す
-            }
-        }
+        // --- toggleQuantityField 関数を以下に差し替え ---
+function toggleQuantityField() {
+    const storeId = document.getElementById('store_id').value;
+    const quantityGroup = document.getElementById('quantity_group');
+    const quantityInput = document.getElementById('quantity');
+    const viaLabel = document.getElementById('via_label'); // 新設
+    const addViaBtn = document.getElementById('add_via_btn'); // 新設
+
+    // 1. ロジックワークス(S001)の場合、ラベルを「荷主」に変える
+    if (storeId === 'S001') {
+        viaLabel.innerText = "荷主 (任意)";
+        addViaBtn.innerText = "＋ 荷主を追加する";
+    } else {
+        viaLabel.innerText = "経由地 (任意)";
+        addViaBtn.innerText = "＋ 経由地を追加する";
+    }
+
+    // 2. 収集運搬(S002)の場合、件数（点数）欄を出す
+    if (storeId === 'S002') {
+        quantityGroup.style.display = 'block';
+        quantityInput.required = true;
+    } else {
+        quantityGroup.style.display = 'none';
+        quantityInput.required = false;
+        quantityInput.value = "";
+    }
+}
 
         function addViaPoint() {
             const container = document.getElementById('viaPointsContainer');
