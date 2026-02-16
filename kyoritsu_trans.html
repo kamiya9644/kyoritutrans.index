@@ -12,115 +12,150 @@
         .form-group { margin-bottom: 18px; }
         label { display: block; margin-bottom: 8px; font-weight: bold; font-size: 14px; }
         input, select, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
+        input:required { border-left: 5px solid #e74c3c; } /* 必須項目を強調 */
+        .btn-submit { width: 100%; padding: 16px; background: var(--main-color); color: white; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 20px; }
+        .btn-submit:disabled { background: #bdc3c7; }
+        .btn-add-via { background: #ecf0f1; border: 1px dashed #bdc3c7; width: 100%; padding: 10px; border-radius: 8px; cursor: pointer; margin-bottom: 10px; }
         .via-point-item { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
-        .btn-remove { background: #e74c3c; color: white; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; flex-shrink: 0; }
-        .btn-add-via { background: white; color: var(--accent-color); border: 2px dashed var(--accent-color); padding: 8px; border-radius: 8px; width: 100%; margin-bottom: 20px; cursor: pointer; font-weight: bold; }
-        button.btn-submit { width: 100%; padding: 16px; background: var(--main-color); color: white; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; }
-        
-        /* 件数入力欄の非表示スタイル */
-        #quantity_group { display: none; background: #eef2f7; padding: 10px; border-radius: 8px; border-left: 5px solid var(--accent-color); }
+        .btn-remove { background: #e74c3c; color: white; border: none; padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; }
     </style>
 </head>
 <body>
-    <h2>作業報告入力</h2>
-    <div class="card">
-        <form id="reportForm">
-            <div class="form-group"><label>積日</label><input type="date" id="date" required></div>
-            
-            <div class="form-group">
-                <label>客先</label>
-                <select id="store_id" onchange="toggleQuantityField()" required>
-                    <option value="">リスト取得中...</option>
-                </select>
-            </div>
+    <form id="reportForm" class="card">
+        <h2 style="text-align:center; margin-top:0;">作業報告入力</h2>
+        
+        <div class="form-group">
+            <label>積日</label>
+            <input type="date" id="date" required>
+        </div>
 
-            <div class="form-group" id="quantity_group">
-                <label>件数 (S002専用項目)</label>
-                <input type="number" id="quantity" placeholder="例：1" min="1">
-            </div>
+        <div class="form-group">
+            <label>請求先（客先名）</label>
+            <select id="store_id" onchange="toggleQuantityField()" required>
+                <option value="">選択してください</option>
+            </select>
+        </div>
 
-            <div class="form-group"><label>積込先</label><input type="text" id="loading_point" placeholder="例：芝浦倉庫" required></div>
-
+        <div class="form-group">
             <label id="via_label">経由地 (任意)</label>
-		<div id="viaPointsContainer"></div>
-		<button type="button" class="btn-add-via" id="add_via_btn" onclick="addViaPoint()">＋ 経由地を追加する</button>
+            <div id="viaPointsContainer"></div>
+            <button type="button" class="btn-add-via" id="add_via_btn" onclick="addViaPoint()">＋ 経由地を追加する</button>
+        </div>
 
-            <div class="form-group"><label>納品先 (最終地点)</label><input type="text" id="delivery_point" placeholder="例：横浜営業所" required></div>
-            <div class="form-group"><label>備考</label><textarea id="remarks" rows="2" placeholder="特記事項があれば入力"></textarea></div>
-            <button type="submit" class="btn-submit">報告を送信する</button>
-        </form>
-    </div>
+        <div class="form-group" id="quantity_group" style="display:none;">
+            <label>件数（点数）</label>
+            <input type="number" id="quantity" placeholder="例: 7">
+        </div>
+
+        <div class="form-group">
+            <label>積込先</label>
+            <input type="text" id="loading_point" placeholder="例: 岬" required>
+        </div>
+
+        <div class="form-group">
+            <label>納品先</label>
+            <input type="text" id="delivery_point" placeholder="例: 泉大津" required>
+        </div>
+
+        <div class="form-group">
+            <label>備考</label>
+            <textarea id="remarks" rows="3"></textarea>
+        </div>
+
+        <button type="submit" class="btn-submit" id="submitBtn">報告を送信する</button>
+    </form>
 
     <script>
-        const GAS_API_URL = "https://script.google.com/macros/s/AKfycbxi2V8irtsST4AYwS_3udOJLJzMrgt2Y2ibJoOKXdKGDDCj77BCoY9uueyhrxPnt-oH/exec";
-        const WEBHOOK_URL = "https://hook.eu1.make.com/7wchwrambaxlegy4h1hy8mxbpqh6orxv";
-        const LIFF_ID = "2009014587-Ej7Q1Xaq";
-
-        // 客先の選択状態によって件数欄を出し入れする
-        // --- toggleQuantityField 関数を以下に差し替え ---
-function toggleQuantityField() {
-    const storeId = document.getElementById('store_id').value;
-    const quantityGroup = document.getElementById('quantity_group');
-    const quantityInput = document.getElementById('quantity');
-    const viaLabel = document.getElementById('via_label'); // 新設
-    const addViaBtn = document.getElementById('add_via_btn'); // 新設
-
-    // 1. ロジックワークス(S001)の場合、ラベルを「荷主」に変える
-    if (storeId === 'S001') {
-        viaLabel.innerText = "荷主 (任意)";
-        addViaBtn.innerText = "＋ 荷主を追加する";
-    } else {
-        viaLabel.innerText = "経由地 (任意)";
-        addViaBtn.innerText = "＋ 経由地を追加する";
-    }
-
-    // 2. 収集運搬(S002)の場合、件数（点数）欄を出す
-    if (storeId === 'S002') {
-        quantityGroup.style.display = 'block';
-        quantityInput.required = true;
-    } else {
-        quantityGroup.style.display = 'none';
-        quantityInput.required = false;
-        quantityInput.value = "";
-    }
-}
-
-        function addViaPoint() {
-            const container = document.getElementById('viaPointsContainer');
-            const div = document.createElement('div');
-            div.className = 'via-point-item';
-            div.innerHTML = `<input type="text" class="via-input" style="flex:1" placeholder="経由地を入力">
-                             <button type="button" class="btn-remove" onclick="this.parentElement.remove()">×</button>`;
-            container.appendChild(div);
-        }
-
-        async function fetchStores() {
-            try {
-                const response = await fetch(GAS_API_URL);
-                const stores = await response.json();
-                const select = document.getElementById('store_id');
-                select.innerHTML = '<option value="">選択してください</option>';
-                stores.forEach(s => {
-                    const opt = document.createElement('option');
-                    opt.value = s.id;
-                    opt.textContent = `${s.name} (${s.id})`;
-                    select.appendChild(opt);
-                });
-            } catch (err) { console.error(err); }
-        }
+        const WEB_APP_URL = "あなたのGAS_API_URL"; 
+        const WEBHOOK_URL = "あなたのMake_Webhook_URL";
 
         async function main() {
             try {
-                await liff.init({ liffId: LIFF_ID });
-                if (!liff.isLoggedIn()) { liff.login(); return; }
+                await liff.init({ liffId: "あなたのLIFF_ID" });
+                if (!liff.isLoggedIn()) { liff.login(); }
                 document.getElementById('date').valueAsDate = new Date();
-                await fetchStores();
-            } catch (err) { alert(err.message); }
+                loadStores();
+            } catch (err) { console.error(err); }
+        }
+
+        async function loadStores() {
+            const res = await fetch(WEB_APP_URL);
+            const stores = await res.json();
+            const select = document.getElementById('store_id');
+            stores.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.id; opt.text = s.name;
+                select.appendChild(opt);
+            });
+        }
+
+        function toggleQuantityField() {
+            const storeId = document.getElementById('store_id').value;
+            const qGroup = document.getElementById('quantity_group');
+            const qInput = document.getElementById('quantity');
+            const vLabel = document.getElementById('via_label');
+            const vBtn = document.getElementById('add_via_btn');
+            const viaInputs = document.querySelectorAll('.via-input');
+
+            // S001(ロジックワークス)判定
+            if (storeId === 'S001') {
+                vLabel.innerText = "荷主 (必須)"; 
+                vBtn.innerText = "＋ 荷主を追加する";
+                // 既に欄がある場合は必須にする。欄がなければ1つ追加。
+                if (viaInputs.length === 0) {
+                    addViaPoint();
+                } else {
+                    viaInputs.forEach(input => input.required = true);
+                }
+            } else {
+                vLabel.innerText = "経由地 (任意)"; 
+                vBtn.innerText = "＋ 経由地を追加する";
+                viaInputs.forEach(input => input.required = false);
+            }
+
+            // S002(収集運搬)判定
+            if (storeId === 'S002') {
+                qGroup.style.display = 'block';
+                qInput.required = true;
+            } else {
+                qGroup.style.display = 'none';
+                qInput.required = false;
+                qInput.value = "";
+            }
+        }
+
+        function addViaPoint() {
+            const container = document.getElementById('viaPointsContainer');
+            const storeId = document.getElementById('store_id').value;
+            const isLogicWorks = (storeId === 'S001');
+
+            const div = document.createElement('div');
+            div.className = 'via-point-item';
+            
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'via-input';
+            input.placeholder = isLogicWorks ? '荷主名を入力' : '経由地を入力';
+            if (isLogicWorks) input.required = true;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'btn-remove';
+            removeBtn.innerText = '削除';
+            removeBtn.onclick = () => {
+                div.remove();
+                // 必須の場合、最低一つは残す等の制御が必要ならここに追加
+            };
+
+            div.appendChild(input);
+            div.appendChild(removeBtn);
+            container.appendChild(div);
         }
 
         document.getElementById('reportForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const submitBtn = document.querySelector('.btn-submit');
+            e.preventDefault(); // デフォルトの送信を防止
+            
+            const submitBtn = document.getElementById('submitBtn');
             submitBtn.disabled = true;
             submitBtn.innerText = "送信中...";
 
@@ -134,7 +169,7 @@ function toggleQuantityField() {
                     userName: profile.displayName,
                     date: document.getElementById('date').value,
                     storeId: document.getElementById('store_id').value,
-                    quantity: document.getElementById('quantity').value || 1, // 件数を追加（空なら1）
+                    quantity: document.getElementById('quantity').value || 1,
                     loadingPoint: document.getElementById('loading_point').value,
                     viaPoints: viaPointsString,
                     deliveryPoint: document.getElementById('delivery_point').value,
@@ -147,9 +182,19 @@ function toggleQuantityField() {
                     body: JSON.stringify(data)
                 });
 
-                if (response.ok) { alert("報告完了"); liff.closeWindow(); }
-                else { alert("送信失敗"); submitBtn.disabled = false; submitBtn.innerText = "報告を送信する"; }
-            } catch (err) { alert(err.message); submitBtn.disabled = false; }
+                if (response.ok) { 
+                    alert("報告を送信しました。"); 
+                    liff.closeWindow(); 
+                } else { 
+                    alert("送信に失敗しました。"); 
+                    submitBtn.disabled = false; 
+                    submitBtn.innerText = "報告を送信する"; 
+                }
+            } catch (err) { 
+                alert("エラー: " + err.message); 
+                submitBtn.disabled = false; 
+                submitBtn.innerText = "報告を送信する";
+            }
         });
 
         main();
