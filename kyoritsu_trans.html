@@ -51,7 +51,7 @@
 
         <div class="card">
             <div class="form-group"><label>全体の備考</label><textarea id="remarks" rows="2" placeholder="特記事項があれば入力"></textarea></div>
-            <button type="submit" class="btn-submit" id="submitBtn">報告を送信する</button>
+            <button type="submit" class="btn-submit" id="submitBtn">まとめて報告を送信</button>
         </div>
     </form>
 
@@ -62,7 +62,6 @@
 
         let setCounter = 0;
 
-        // 運行セットの追加
         function addWorkSet() {
             setCounter++;
             const container = document.getElementById('setsContainer');
@@ -97,7 +96,6 @@
             updateRemoveButtons();
         }
 
-        // セットが1つだけの時は削除ボタンを隠す
         function updateRemoveButtons() {
             const sets = document.querySelectorAll('.work-set');
             sets.forEach(set => {
@@ -106,7 +104,6 @@
             });
         }
 
-        // 経由地/荷主の削除処理（S001の場合は最後の一つを消させない）
         function removeViaPoint(btn) {
             const item = btn.parentElement;
             const list = item.parentElement;
@@ -194,6 +191,7 @@
                 const storeId = document.getElementById('store_id').value;
                 const commonRemarks = document.getElementById('remarks').value;
 
+                // データのリスト（配列）を作成
                 const payloadArray = Array.from(document.querySelectorAll('.work-set')).map(set => {
                     const viaInputs = set.querySelectorAll('.via-input');
                     const viaList = Array.from(viaInputs).map(i => i.value.trim()).filter(v => v).join('、');
@@ -210,20 +208,21 @@
                     };
                 });
 
+                // Make.comのWebhookへ送信（"records"という名前で包む）
                 const response = await fetch(WEBHOOK_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payloadArray)
+                    body: JSON.stringify({ "records": payloadArray }) 
                 });
 
                 if (response.ok) {
-                    alert("すべての運行報告を完了しました。");
+                    alert("すべての運行報告を送信しました。");
                     liff.closeWindow();
                 } else {
-                    throw new Error("送信に失敗しました。Makeの設定を確認してください。");
+                    throw new Error("送信エラーが発生しました。");
                 }
             } catch (err) {
-                alert(err.message);
+                alert("エラー: " + err.message);
                 submitBtn.disabled = false;
                 submitBtn.innerText = "報告を送信する";
             }
