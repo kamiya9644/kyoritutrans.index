@@ -60,19 +60,19 @@
         const WEBHOOK_URL = "https://hook.eu1.make.com/7wchwrambaxlegy4h1hy8mxbpqh6orxv";
         const LIFF_ID = "2009014587-Ej7Q1Xaq";
 
-        let setCount = 0;
+        let setCounter = 0;
 
         // 運行セットの追加
         function addWorkSet() {
-            setCount++;
+            setCounter++;
             const container = document.getElementById('setsContainer');
             const div = document.createElement('div');
             div.className = 'work-set';
-            div.id = `set_${setCount}`;
+            div.id = `work_set_row_${setCounter}`;
             div.innerHTML = `
                 <div class="work-set-header">
-                    <span class="set-title">運行 #${setCount}</span>
-                    ${setCount > 1 ? `<button type="button" class="btn-remove-set" onclick="removeSet(${setCount})">削除</button>` : ''}
+                    <span class="set-title">運行内容</span>
+                    <button type="button" class="btn-remove-set" onclick="removeSet('${div.id}')">削除</button>
                 </div>
                 <div class="form-group"><label>積込先</label><input type="text" class="loading_point" placeholder="例：芝浦" required></div>
                 <div class="form-group">
@@ -88,11 +88,37 @@
             `;
             container.appendChild(div);
             syncAllSets(); 
+            updateRemoveButtons();
         }
 
-        function removeSet(id) { document.getElementById(`set_${id}`).remove(); }
+        function removeSet(elementId) {
+            const el = document.getElementById(elementId);
+            if (el) el.remove();
+            updateRemoveButtons();
+        }
 
-        // 各セット内の経由地/荷主追加
+        // セットが1つだけの時は削除ボタンを隠す
+        function updateRemoveButtons() {
+            const sets = document.querySelectorAll('.work-set');
+            sets.forEach(set => {
+                const btn = set.querySelector('.btn-remove-set');
+                btn.style.display = (sets.length === 1) ? 'none' : 'block';
+            });
+        }
+
+        // 経由地/荷主の削除処理（S001の場合は最後の一つを消させない）
+        function removeViaPoint(btn) {
+            const item = btn.parentElement;
+            const list = item.parentElement;
+            const storeId = document.getElementById('store_id').value;
+            
+            if (storeId === 'S001' && list.querySelectorAll('.via-point-item').length <= 1) {
+                alert("荷主は1つ以上入力してください。");
+                return;
+            }
+            item.remove();
+        }
+
         function addViaPointToSet(btn) {
             const list = btn.previousElementSibling;
             const storeId = document.getElementById('store_id').value;
@@ -102,25 +128,22 @@
             div.className = 'via-point-item';
             div.innerHTML = `
                 <input type="text" class="via-input" placeholder="${isLogicWorks ? '荷主名を入力' : '経由地を入力'}" ${isLogicWorks ? 'required' : ''}>
-                <button type="button" class="btn-remove-via" onclick="this.parentElement.remove()">×</button>
+                <button type="button" class="btn-remove-via" onclick="removeViaPoint(this)">×</button>
             `;
             list.appendChild(div);
         }
 
-        // 全セットの状態を客先に合わせて同期
         function syncAllSets() {
             const storeId = document.getElementById('store_id').value;
             const sets = document.querySelectorAll('.work-set');
             
             sets.forEach(set => {
                 const viaLabel = set.querySelector('.via_label');
-                const viaInputs = set.querySelectorAll('.via-input');
                 const qGroup = set.querySelector('.quantity_group');
                 const qInput = set.querySelector('.quantity');
 
                 if (storeId === 'S001') {
                     viaLabel.innerText = "荷主 (必須)";
-                    // 荷主が一つもない場合は自動追加
                     if (set.querySelectorAll('.via-point-item').length === 0) {
                         addViaPointToSet(set.querySelector('.btn-add-via'));
                     }
@@ -172,7 +195,8 @@
                 const commonRemarks = document.getElementById('remarks').value;
 
                 const payloadArray = Array.from(document.querySelectorAll('.work-set')).map(set => {
-                    const viaList = Array.from(set.querySelectorAll('.via-input')).map(i => i.value.trim()).filter(v => v).join('、');
+                    const viaInputs = set.querySelectorAll('.via-input');
+                    const viaList = Array.from(viaInputs).map(i => i.value.trim()).filter(v => v).join('、');
                     return {
                         userId: profile.userId,
                         userName: profile.displayName,
@@ -196,7 +220,7 @@
                     alert("すべての運行報告を完了しました。");
                     liff.closeWindow();
                 } else {
-                    throw new Error("送信エラーが発生しました。");
+                    throw new Error("送信に失敗しました。Makeの設定を確認してください。");
                 }
             } catch (err) {
                 alert(err.message);
